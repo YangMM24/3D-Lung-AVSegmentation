@@ -1,0 +1,27 @@
+name: vessel_seg
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=11.8
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - seaborn
+  - jupyter
+  - pip
+  - pip:
+    - nibabel
+    - scikit-image
+    - openpyxl
+    - xlrd
+    - tqdm
+    - tensorboard
+    - opencv-python
