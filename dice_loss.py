@@ -242,7 +242,8 @@ class CombinedDiceBCELoss(nn.Module):
     """
     
     def __init__(self, dice_weight=1.0, bce_weight=1.0, smooth=1e-6, 
-                 focal_alpha=None, focal_gamma=2.0, class_weights=None):
+                 focal_alpha=None, focal_gamma=2.0, class_weights=None, 
+                 use_soft_skeleton=False, num_iter=40):
         """
         Args:
             dice_weight (float): Weight for Dice loss
@@ -255,9 +256,10 @@ class CombinedDiceBCELoss(nn.Module):
         super().__init__()
         self.dice_weight = dice_weight
         self.bce_weight = bce_weight
-        
+        self.use_soft_skeleton = use_soft_skeleton
         # Dice loss with class weights
         self.dice_loss = MultiClassDiceLoss(smooth=smooth, class_weights=class_weights)
+        self.num_iter = num_iter
         
         # BCE or Focal loss
         if focal_alpha is not None:

@@ -210,28 +210,48 @@ class HiPaSDataset(Dataset):
             if self.transform is not None:
                 image, artery_mask, vein_mask = self.transform(image, artery_mask, vein_mask)
             
-            # Convert to tensors
-            image = torch.from_numpy(image).float().unsqueeze(0)  # [1, D, H, W]
-            artery_mask = torch.from_numpy(artery_mask).float()   # [D, H, W]
-            vein_mask = torch.from_numpy(vein_mask).float()       # [D, H, W]
+            # 🔧 CRITICAL FIX: Ensure array contiguity to fix stride issues
+            image = np.ascontiguousarray(image)
+            artery_mask = np.ascontiguousarray(artery_mask)
+            vein_mask = np.ascontiguousarray(vein_mask)
+            
+            # Convert to tensors with correct keys for train.py
+            image_tensor = torch.from_numpy(image).float().unsqueeze(0)  # [1, D, H, W]
+            artery_tensor = torch.from_numpy(artery_mask).float()         # [D, H, W]
+            vein_tensor = torch.from_numpy(vein_mask).float()             # [D, H, W]
             
             return {
-                'image': image,
-                'artery_mask': artery_mask,
-                'vein_mask': vein_mask,
-                'case_name': sample['case_name']
+                'images': image_tensor,          # Changed from 'image' to 'images'
+                'artery_masks': artery_tensor,   # Changed from 'artery_mask' to 'artery_masks'
+                'vein_masks': vein_tensor,       # Changed from 'vein_mask' to 'vein_masks'
+                'case_names': sample['case_name'] # Changed from 'case_name' to 'case_names'
             }
             
         except Exception as e:
             print(f"Error loading sample {sample['case_name']}: {e}")
-            # Return dummy data to avoid crashing
-            dummy_shape = self.target_size
-            return {
-                'image': torch.zeros((1,) + dummy_shape, dtype=torch.float32),
-                'artery_mask': torch.zeros(dummy_shape, dtype=torch.float32),
-                'vein_mask': torch.zeros(dummy_shape, dtype=torch.float32),
-                'case_name': sample['case_name']
-            }
+            # Return safe fallback data with correct keys
+            return self._get_fallback_sample(sample['case_name'])
+    
+    def _get_fallback_sample(self, case_name):
+        """Return a safe fallback sample when loading fails"""
+        dummy_shape = self.target_size
+        
+        # Create safe, contiguous arrays
+        image = np.zeros((1,) + dummy_shape, dtype=np.float32)
+        artery_mask = np.zeros(dummy_shape, dtype=np.float32)
+        vein_mask = np.zeros(dummy_shape, dtype=np.float32)
+        
+        # Ensure contiguity
+        image = np.ascontiguousarray(image)
+        artery_mask = np.ascontiguousarray(artery_mask)
+        vein_mask = np.ascontiguousarray(vein_mask)
+        
+        return {
+            'images': torch.from_numpy(image).float(),
+            'artery_masks': torch.from_numpy(artery_mask).float(),
+            'vein_masks': torch.from_numpy(vein_mask).float(),
+            'case_names': f"fallback_{case_name}"
+        }
     
     def _load_npz(self, file_path):
         """Load NPZ file with error handling"""
@@ -368,17 +388,27 @@ class HiPaSCollateFunction:
         if len(batch) == 0:
             return None
         
-        images = torch.stack([item['image'] for item in batch])
-        artery_masks = torch.stack([item['artery_mask'] for item in batch])
-        vein_masks = torch.stack([item['vein_mask'] for item in batch])
-        case_names = [item['case_name'] for item in batch]
+        # Check for fallback samples and skip batches with too many fallbacks
+        fallback_count = sum(1 for item in batch if 'fallback' in str(item['case_names']))
+        if fallback_count > len(batch) * 0.5:  # More than 50% fallbacks
+            print(f"Skipping batch with {fallback_count}/{len(batch)} fallback samples")
+            return None
         
-        return {
-            'images': images,           # [B, 1, D, H, W]
-            'artery_masks': artery_masks,  # [B, D, H, W]
-            'vein_masks': vein_masks,      # [B, D, H, W]
-            'case_names': case_names
-        }
+        try:
+            images = torch.stack([item['images'] for item in batch])
+            artery_masks = torch.stack([item['artery_masks'] for item in batch])
+            vein_masks = torch.stack([item['vein_masks'] for item in batch])
+            case_names = [item['case_names'] for item in batch]
+            
+            return {
+                'images': images,           # [B, 1, D, H, W]
+                'artery_masks': artery_masks,  # [B, D, H, W]
+                'vein_masks': vein_masks,      # [B, D, H, W]
+                'case_names': case_names
+            }
+        except Exception as e:
+            print(f"Error in collate function: {e}")
+            return None
 
 
 # Test and usage example
@@ -386,7 +416,7 @@ if __name__ == '__main__':
     from torch.utils.data import DataLoader
     
     # Set your dataset path
-    data_dir = 'D:/yangmiaomiao/study/ucl/final/3D_lung_segmentation/dataset'
+    data_dir = './dataset'
     
     print("Testing HiPaS Dataset Loader...")
     
@@ -406,10 +436,15 @@ if __name__ == '__main__':
             # Test single sample
             print(f"\nTesting sample loading...")
             sample = dataset[0]
-            print(f"✓ Image shape: {sample['image'].shape}")
-            print(f"✓ Artery mask shape: {sample['artery_mask'].shape}")
-            print(f"✓ Vein mask shape: {sample['vein_mask'].shape}")
-            print(f"✓ Case name: {sample['case_name']}")
+            print(f"✓ Images shape: {sample['images'].shape}")
+            print(f"✓ Artery masks shape: {sample['artery_masks'].shape}")
+            print(f"✓ Vein masks shape: {sample['vein_masks'].shape}")
+            print(f"✓ Case name: {sample['case_names']}")
+            
+            # Check for contiguity
+            print(f"✓ Images contiguous: {sample['images'].is_contiguous()}")
+            print(f"✓ Artery contiguous: {sample['artery_masks'].is_contiguous()}")
+            print(f"✓ Vein contiguous: {sample['vein_masks'].is_contiguous()}")
             
             # Test data loader
             print(f"\nTesting DataLoader...")
@@ -423,8 +458,12 @@ if __name__ == '__main__':
             )
             
             # Test one batch
+            batch_count = 0
             for batch_idx, batch in enumerate(dataloader):
-                print(f"✓ Batch {batch_idx}:")
+                if batch is None:
+                    continue
+                
+                print(f"✓ Batch {batch_count}:")
                 print(f"  Images: {batch['images'].shape}")
                 print(f"  Artery masks: {batch['artery_masks'].shape}")
                 print(f"  Vein masks: {batch['vein_masks'].shape}")
@@ -434,7 +473,10 @@ if __name__ == '__main__':
                 print(f"  Image range: [{batch['images'].min():.3f}, {batch['images'].max():.3f}]")
                 print(f"  Artery mask unique values: {torch.unique(batch['artery_masks'])}")
                 print(f"  Vein mask unique values: {torch.unique(batch['vein_masks'])}")
-                break
+                
+                batch_count += 1
+                if batch_count >= 3:  # Test first 3 valid batches
+                    break
             
             print(f"\n🎉 All tests passed! Dataset is ready for training.")
             

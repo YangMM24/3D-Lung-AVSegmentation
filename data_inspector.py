@@ -34,7 +34,7 @@ def quick_inspect():
     """
     快速检查前5个样本的数据结构
     """
-    base_path = Path("D:/yangmiaomiao/study/ucl/final/3D_lung_segmentation/dataset")
+    base_path = Path("./dataset")
     
     print("🔍 检查NPZ文件数据结构")
     print("=" * 60)

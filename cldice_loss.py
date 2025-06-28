@@ -127,7 +127,7 @@ class clDiceLoss(nn.Module):
     Adapted for 3D vessel segmentation with soft skeletonization
     """
     
-    def __init__(self, smooth=1e-6, alpha=1.0, num_iter=40, use_soft_skeleton=True):
+    def __init__(self, dice_weight=1.0, cldice_weight=1.0, smooth=1e-6, alpha=1.0, num_iter=40, use_soft_skeleton=True):
         """
         Args:
             smooth (float): Smoothing factor to avoid division by zero
@@ -136,6 +136,8 @@ class clDiceLoss(nn.Module):
             use_soft_skeleton (bool): Use differentiable soft skeletonization
         """
         super().__init__()
+        self.dice_weight = dice_weight
+        self.cldice_weight = cldice_weight
         self.smooth = smooth
         self.alpha = alpha
         self.num_iter = num_iter
@@ -273,8 +275,8 @@ class AdaptiveclDiceLoss(nn.Module):
     Adjusts the importance of topology preservation based on training progress
     """
     
-    def __init__(self, initial_dice_weight=1.0, initial_cldice_weight=0.1,
-                 max_cldice_weight=1.0, warmup_epochs=50, smooth=1e-6):
+    def __init__(self, initial_dice_weight=1.0, dice_weight=1.0, initial_cldice_weight=0.1,
+                 max_cldice_weight=1.0, warmup_epochs=50, smooth=1e-6, use_soft_skeleton=True,):
         """
         Args:
             initial_dice_weight (float): Initial weight for Dice loss
@@ -284,10 +286,13 @@ class AdaptiveclDiceLoss(nn.Module):
             smooth (float): Smoothing factor
         """
         super().__init__()
+        self.dice_weight = dice_weight
         self.initial_dice_weight = initial_dice_weight
         self.initial_cldice_weight = initial_cldice_weight
         self.max_cldice_weight = max_cldice_weight
+        self.smooth = smooth
         self.warmup_epochs = warmup_epochs
+        self.use_soft_skeleton = use_soft_skeleton
         self.current_epoch = 0
         
         # Loss components

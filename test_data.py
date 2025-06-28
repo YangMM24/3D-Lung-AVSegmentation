@@ -1,7 +1,7 @@
 import os
 
 # 快速检查你的数据集结构
-data_dir = 'D:/yangmiaomiao/study/ucl/final/3D_lung_segmentation/dataset'
+data_dir = './dataset'
 
 print("=== 快速数据集检查 ===")
 print(f"数据集路径: {data_dir}")
